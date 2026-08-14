@@ -1,0 +1,8 @@
+# These files are bind-mounted into Linux containers. CRLF line endings will
+# break FRR's config parser and StayRTR's JSON reader, so force LF everywhere
+# regardless of what platform the repo is cloned on.
+* text=auto eol=lf
+*.conf text eol=lf
+daemons text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
