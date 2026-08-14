@@ -324,6 +324,22 @@ That gap is most of why Phases 2 and 3 exist.
 
 ---
 
+---
+
+## Phase 6 — RTBH, and Phase 7 — FlowSpec
+
+Continued in **[PHASE6-RTBH.md](PHASE6-RTBH.md)**.
+
+Phases 1–3 covered hijacking and prevention. Phase 6 covers the other half of carrier
+security: signalling your upstream provider to drop a DDoS *before* it saturates your link,
+using the BGP session you already have. The scaffolding is already staged in the `transit`
+and `isp` configs.
+
+Phase 7 sketches BGP FlowSpec as a stretch goal — it needs ExaBGP, since FRR can receive
+FlowSpec but not originate it.
+
+---
+
 ## Teardown
 
 ```bash
