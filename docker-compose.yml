@@ -1,0 +1,83 @@
+name: bgp-hijack-lab
+
+# Four autonomous systems on a shared segment, plus an RPKI-to-Router cache.
+#
+#   AS65002 (isp)      10.99.0.2   originates 203.0.113.0/24  <-- the legitimate holder
+#   AS65001 (transit)  10.99.0.1   route hub, peers with everyone
+#   AS65003 (customer) 10.99.0.3   downstream observer -- this is where you watch
+#   AS65004 (rogue)    10.99.0.4   the hijacker
+#   stayrtr            10.99.0.10  RPKI cache, serves VRPs over RTR/3323
+#
+# Gateway is parked on .254 so the bridge does not steal 10.99.0.1 from transit.
+
+networks:
+  ixp:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.99.0.0/24
+          gateway: 10.99.0.254
+
+services:
+  rpki-cache:
+    image: ghcr.io/bgp/stayrtr:latest
+    container_name: bgp-rpki
+    command:
+      - "-cache=/vrps.json"
+      - "-bind=:3323"
+      - "-verify=false"
+      - "-checktime=false"
+    volumes:
+      - ./rpki/vrps.json:/vrps.json:ro
+    networks:
+      ixp:
+        ipv4_address: 10.99.0.10
+    restart: unless-stopped
+
+  transit:
+    image: frrouting/frr:latest
+    container_name: bgp-transit
+    privileged: true
+    volumes:
+      - ./frr/daemons:/etc/frr/daemons
+      - ./frr/transit/frr.conf:/etc/frr/frr.conf
+    networks:
+      ixp:
+        ipv4_address: 10.99.0.1
+    restart: unless-stopped
+
+  isp:
+    image: frrouting/frr:latest
+    container_name: bgp-isp
+    privileged: true
+    volumes:
+      - ./frr/daemons:/etc/frr/daemons
+      - ./frr/isp/frr.conf:/etc/frr/frr.conf
+    networks:
+      ixp:
+        ipv4_address: 10.99.0.2
+    restart: unless-stopped
+
+  customer:
+    image: frrouting/frr:latest
+    container_name: bgp-customer
+    privileged: true
+    volumes:
+      - ./frr/daemons:/etc/frr/daemons
+      - ./frr/customer/frr.conf:/etc/frr/frr.conf
+    networks:
+      ixp:
+        ipv4_address: 10.99.0.3
+    restart: unless-stopped
+
+  rogue:
+    image: frrouting/frr:latest
+    container_name: bgp-rogue
+    privileged: true
+    volumes:
+      - ./frr/daemons:/etc/frr/daemons
+      - ./frr/rogue/frr.conf:/etc/frr/frr.conf
+    networks:
+      ixp:
+        ipv4_address: 10.99.0.4
+    restart: unless-stopped
