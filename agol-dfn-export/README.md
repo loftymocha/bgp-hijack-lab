@@ -155,8 +155,14 @@ environment is sound before you point it at real credentials.
 If you can't install Python — locked-down laptop, or you'd simply rather not run
 scripts on a work machine — use **[`excel-template/DFN-Splitter-Matcher.xlsx`](excel-template/)**
 instead. It does the tier labelling and nearest-address matching with Excel
-formulas alone. You export two layers out of AGOL with its built-in
-**Export Data → Export to CSV**, paste them in, and read the finished schedule.
+formulas alone: you get your splitter layer and your address layer into two tabs,
+name the columns on a Setup tab, and read the finished schedule.
+
+Two ways to get the data in. If the layer's item page offers **Export Data →
+Export to CSV**, use it. If that button isn't there — the export capability is
+off, and you can't enable it yourself — use the Power Query below instead, which
+reads the layer through the query endpoint and doesn't need export permission at
+all. Either way it ends up pasted into the same two tabs.
 
 It handles two layers rather than the whole map and can't reverse geocode, but it
 removes the same manual step and needs nothing installed. See
@@ -164,35 +170,17 @@ removes the same manual step and needs nothing installed. See
 
 ## Also no-install: Excel Power Query
 
-Excel can also hit the REST endpoint directly, which gets you a live, refreshable
-table of a single layer that updates when the data does. It does no tier or address
-work — for that use the workbook above — but it's the only option here that stays
-connected to the live service.
+Excel can query the service directly, which gets you a live, refreshable table
+that updates when the data does. It does no tier or address work — for that use
+the workbook above — but it is the only option here that stays connected to the
+live service.
 
-**Data → Get Data → From Other Sources → Blank Query → Advanced Editor**, then:
-
-```m
-let
-    Url = "https://services9.arcgis.com/YOURORG/arcgis/rest/services/DFN/FeatureServer/0/query",
-    Source = Json.Document(
-        Web.Contents(Url, [Query=[
-            where="1=1", outFields="*", returnGeometry="false",
-            resultRecordCount="2000", f="json"
-        ]])
-    ),
-    Features = Table.FromList(Source[features], Splitter.SplitByNothing(), {"Column1"}),
-    Attrs = Table.ExpandRecordColumn(Features, "Column1", {"attributes"}, {"attributes"}),
-    Fields = Record.FieldNames(Attrs{0}[attributes]),
-    Result = Table.ExpandRecordColumn(Attrs, "attributes", Fields, Fields)
-in
-    Result
-```
-
-Swap in your own layer URL — copy it from the layer's item page in AGOL, under
-the **URL** button on the right. Refresh pulls current data. Note the 2,000-record
-cap: Power Query won't page for you, which is most of why the script exists.
-
----
+Crucially, **it also works when the layer's Export Data button is missing**:
+exporting and querying are separate permissions, and this uses the query
+endpoint that the web map itself uses. See
+[`powerquery/README.md`](powerquery/README.md) for the full walkthrough, and
+[`powerquery/agol-layer.pq`](powerquery/agol-layer.pq) for the query — it pages
+through the whole layer rather than stopping at the service's per-request cap.
 
 ## Troubleshooting
 

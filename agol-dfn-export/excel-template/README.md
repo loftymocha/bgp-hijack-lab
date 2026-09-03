@@ -10,9 +10,11 @@ manual step, and it does it inside a program you already have open.
 
 ## How it works
 
-1. Export your **splitter layer** from AGOL: open the layer's item page →
-   **Export Data → Export to CSV**. Paste it into the `Splitters` tab.
-2. Export your **address point layer** the same way. Paste it into `Addresses`.
+1. Get your **splitter layer** into the `Splitters` tab. Either open the layer's
+   item page → **Export Data → Export to CSV**, or — if that button isn't there —
+   use [`../powerquery/agol-layer.pq`](../powerquery/), which reads the layer
+   without needing export permission.
+2. Get your **address point layer** into the `Addresses` tab the same way.
 3. On the `Setup` tab, type the column headings for splitter ID, tier, ratio, and
    the `x`/`y` coordinate columns, plus how many rows you pasted.
 4. Fill in the tier lookup — the exact values your data uses (`Level 1`, `P`,
