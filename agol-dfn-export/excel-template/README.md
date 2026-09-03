@@ -59,6 +59,24 @@ A splitter in open ground shouldn't get labelled with a house 900 ft away.
 - **Export Data must be enabled** on the layer. It usually is for hosted feature
   layers; a referenced layer may not offer it.
 
+## Verifying it
+
+Two checks, both offline:
+
+```bash
+python3 verify_math.py      # the arithmetic is right
+python3 verify_formulas.py  # Excel will actually compute it (pip install formulas)
+```
+
+`verify_math.py` reimplements the Schedule tab's logic independently and checks
+tier mapping, nearest-address selection, and the distance gate. `verify_formulas.py`
+evaluates the workbook's real formulas and confirms every one parses, resolves,
+and lands on the expected value rather than `#REF!`/`#VALUE!`/`#N/A`.
+
+The second builds a scaled-down variant first — same formulas, smaller lookup
+bound — because the formula engine materialises those grids in memory and the
+shipped 100,000-row bound exhausts it. Excel itself has no such problem.
+
 ## Rebuilding it
 
 `DFN-Splitter-Matcher.xlsx` is generated, so it can be regenerated:

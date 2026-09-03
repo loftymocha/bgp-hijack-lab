@@ -215,10 +215,13 @@ def ci(key: str) -> str:
     return f"Setup!$C${SETUP_ROWS[key]}"
 
 
-# Bounding the lookup at column CZ keeps INDEX cheap; an AGOL export with more
-# than 104 columns would need this widened.
-SPL = "Splitters!$A:$CZ"
-ADDR = "Addresses!$A:$CZ"
+# The lookup grids are bounded on both axes rather than written as whole-column
+# references. Row 1 is included so a sheet row number indexes the grid directly.
+# Widen MAX_ROWS if a layer ever exceeds it; column CZ is 104 columns, which is
+# far more than an AGOL export carries.
+MAX_ROWS = 100000
+SPL = f"Splitters!$A$1:$CZ${MAX_ROWS}"
+ADDR = f"Addresses!$A$1:$CZ${MAX_ROWS}"
 
 
 def build_setup(wb):
