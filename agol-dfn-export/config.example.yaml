@@ -1,0 +1,102 @@
+# ---------------------------------------------------------------------------
+# dfn_export.py configuration
+#
+# Copy to config.yaml and edit. Run `dfn_export.py discover` first -- it prints
+# every layer and field name in your map, which is what you need to fill this in.
+# ---------------------------------------------------------------------------
+
+# Your ArcGIS Online org URL. Use https://www.arcgis.com if unsure, or your
+# Portal for ArcGIS URL if your shop runs Enterprise on-prem.
+portal: https://www.arcgis.com
+
+auth:
+  # prompt    -- ask for username/password at the terminal (recommended)
+  # api_key   -- read an API key from the environment variable below
+  # anonymous -- for public data only
+  mode: prompt
+  username: null          # optional; prompts if left null
+  api_key_env: AGOL_API_KEY
+
+source:
+  # The 32-character id from the web map URL:
+  # https://myorg.maps.arcgis.com/home/webmap/viewer.html?webmap=<THIS PART>
+  webmap_item_id: null
+
+  # Or point straight at feature services instead of (or in addition to) a map.
+  # A URL ending in /FeatureServer pulls every sublayer; /FeatureServer/3 pulls one.
+  service_urls: []
+
+query:
+  where: "1=1"                    # e.g. "STATUS = 'AS_BUILT'" to filter
+  out_sr: 4326                    # keep 4326 so lat/lon come out as degrees
+  page_size: 1000
+  max_features_per_layer: 100000
+  decode_domains: true            # turn coded values (1, 2, 3) into their labels
+  only_layers: []                 # if set, export ONLY layers matching these substrings
+  skip_layers:                    # substrings; matched case-insensitively
+    - basemap
+    - imagery
+
+splitters:
+  # Which layer(s) hold splitters. Substring match on the layer title.
+  layers:
+    - splitter
+
+  # First field that has a value wins. Put your real field names here.
+  name_fields:
+    - SPLITTER_ID
+    - FACILITY_ID
+    - NAME
+
+  ratio_fields:
+    - SPLIT_RATIO
+    - RATIO
+    - PORT_COUNT
+
+  tier:
+    # Fields that carry the primary/secondary/tertiary designation.
+    fields:
+      - SPLTR_LEVEL
+      - TIER
+      - SPLITTER_TYPE
+
+    # Run `dfn_export.py profile` to see the actual values in those fields,
+    # then list them here. Matching is case-insensitive, whole-word.
+    keywords:
+      Primary:   ["primary", "level 1", "l1", "p1", "1"]
+      Secondary: ["secondary", "level 2", "l2", "p2", "2"]
+      Tertiary:  ["tertiary", "level 3", "l3", "p3", "3"]
+
+    # Optional fallback: infer the tier from the split ratio when no tier field
+    # has a value. Only fill this in if your build is consistent about it.
+    ratio_map: {}
+    #  "1x4":  Primary
+    #  "1x8":  Secondary
+    #  "1x32": Tertiary
+
+    # Optional last-resort fallback: regex against any attribute value.
+    name_patterns: {}
+    #  "^FDH": Primary
+    #  "-S\\d+-": Secondary
+
+address:
+  # layer   -- nearest point from an address layer already in your map (free, exact)
+  # geocode -- ArcGIS World Geocoder reverse lookup (uses credits; results cached)
+  # none    -- leave the address column blank
+  source: layer
+
+  layer: address                  # substring match on the address layer title
+  fields:                         # joined with spaces to build the address text
+    - HOUSE_NUM
+    - STREET
+  # For a layer that already has one combined field, just use:
+  # fields: [FULL_ADDRESS]
+
+  max_distance_ft: 500            # farther than this is flagged, not filled in
+  geocode_url: https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode
+  geocode_cache: geocode_cache.json
+
+output:
+  workbook: dfn_export.xlsx
+  csv_dir: null                   # set a folder path to also drop one CSV per layer
+  max_column_width: 55
