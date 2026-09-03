@@ -150,11 +150,24 @@ environment is sound before you point it at real credentials.
 
 ---
 
-## No-install fallback: Excel Power Query
+## No-install option: the Excel workbook
 
-If you can't install Python at all, Excel can hit the same REST endpoint directly.
-It won't do the tier or address work, but it does get you a live, refreshable
-table of any single layer.
+If you can't install Python — locked-down laptop, or you'd simply rather not run
+scripts on a work machine — use **[`excel-template/DFN-Splitter-Matcher.xlsx`](excel-template/)**
+instead. It does the tier labelling and nearest-address matching with Excel
+formulas alone. You export two layers out of AGOL with its built-in
+**Export Data → Export to CSV**, paste them in, and read the finished schedule.
+
+It handles two layers rather than the whole map and can't reverse geocode, but it
+removes the same manual step and needs nothing installed. See
+[`excel-template/README.md`](excel-template/README.md).
+
+## Also no-install: Excel Power Query
+
+Excel can also hit the REST endpoint directly, which gets you a live, refreshable
+table of a single layer that updates when the data does. It does no tier or address
+work — for that use the workbook above — but it's the only option here that stays
+connected to the live service.
 
 **Data → Get Data → From Other Sources → Blank Query → Advanced Editor**, then:
 
