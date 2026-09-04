@@ -18,9 +18,11 @@ FT_PER_DEG = 364000.0
 MAX_FT = 500.0
 
 SPLITTERS = [
-    ("SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000),
-    ("SPL-002", "Secondary 1x16", None, -83.001000, 40.000500),
-    ("SPL-003", 7, None, -83.002000, 40.001000),
+    # (name, SPLITTER_ORDER, SPLITTER_RATIO, lon, lat) -- both integers, as the
+    # real layer stores them.
+    ("SPL-001", 1, 8, -83.000000, 40.000000),
+    ("SPL-002", 2, 16, -83.001000, 40.000500),
+    ("SPL-003", 3, 128, -83.002000, 40.001000),
     ("SPL-004", None, None, -83.050000, 40.050000),
 ]
 ADDRESSES = [
@@ -31,10 +33,9 @@ ADDRESSES = [
 # Substring rules, mirroring the workbook's SEARCH-based lookup.
 TIER_RULES = [
     # (value or word, tier, ratio supplied here or None)
-    ("Primary", "Primary", None),
-    ("Secondary", "Secondary", None),
-    ("Tertiary", "Tertiary", None),
-    (7, "Tertiary", "1x128"),
+    (1, "Primary", None),
+    (2, "Secondary", None),
+    (3, "Tertiary", None),
 ]
 
 
@@ -58,16 +59,22 @@ def resolve_tier(raw):
     return TIER_RULES[i][1] if i is not None else ""
 
 
-def resolve_ratio(raw):
-    """What the Ratio column computes with no separate ratio field named."""
-    i = matched_rule(raw)
+def resolve_ratio(raw_order, raw_ratio):
+    """What the Ratio column computes, including the 1x rendering."""
+    i = matched_rule(raw_order)
     if i is not None and TIER_RULES[i][2]:
-        return TIER_RULES[i][2]          # ratio typed beside the matched rule
-    if raw is None:
+        value = TIER_RULES[i][2]          # ratio typed beside the matched rule
+    elif raw_ratio not in (None, ""):
+        value = raw_ratio                 # the named ratio field
+    elif raw_order is not None:
+        text = str(raw_order)             # last resort: lift 1x<n> out of the text
+        at = text.lower().find("1x")
+        value = text[at:at + 20].strip() if at >= 0 else ""
+    else:
+        value = ""
+    if value == "":
         return ""
-    text = str(raw)
-    at = text.lower().find("1x")
-    return text[at:at + 20].strip() if at >= 0 else ""
+    return f"1x{value}" if isinstance(value, (int, float)) else str(value)
 
 EXPECTED = {
     # splitter: (tier, nearest address, ratio)
@@ -90,9 +97,9 @@ def main() -> int:
     print(f"{'splitter':<10} {'tier':<10} {'ratio':<7} {'nearest':<16} {'dist ft':>9}  verdict")
     print("-" * 68)
 
-    for name, raw_tier, _ratio, lon, lat in SPLITTERS:
+    for name, raw_tier, raw_ratio, lon, lat in SPLITTERS:
         tier = resolve_tier(raw_tier)
-        ratio = resolve_ratio(raw_tier)
+        ratio = resolve_ratio(raw_tier, raw_ratio)
         d2 = [dist2_ft(lon, lat, alon, alat) for _n, _s, alon, alat in ADDRESSES]
         best = min(d2)
         idx = d2.index(best)

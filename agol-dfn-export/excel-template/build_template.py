@@ -261,11 +261,11 @@ def build_setup(wb):
     put(ws, "A4", "SPLITTERS TAB", LABEL_FONT)
     rowfield(5, "First data row", 2, "Row your first splitter is on (2 if headers are in row 1)")
     rowfield(6, "Last data row", 5, "Row your last splitter is on -- set to your real count")
-    colfield(7, "Splitter ID column", "SPLITTER_ID", "Splitters",
+    colfield(7, "Splitter ID column", "NETWORK_DEVICE_NAME", "Splitters",
              "Type the column HEADING exactly as it appears in row 1 of that tab")
-    colfield(8, "Tier / level column", "SPLTR_LEVEL", "Splitters",
+    colfield(8, "Tier / order column", "SPLITTER_ORDER", "Splitters",
              "The heading of the column holding primary/secondary/tertiary")
-    colfield(9, "Split ratio column", "", "Splitters",
+    colfield(9, "Split ratio column", "SPLITTER_RATIO", "Splitters",
              "Leave BLANK if the ratio is part of the tier value (e.g. \"Primary 1x128\") "
              "-- it will be read out of that instead",
              optional=True)
@@ -310,10 +310,9 @@ def build_setup(wb):
     put(ws, "D29", "Ratio (optional)", LABEL_FONT)
 
     seed = [
-        ("Primary", "Primary", None),
-        ("Secondary", "Secondary", None),
-        ("Tertiary", "Tertiary", None),
-        (7, "Tertiary", "1x128"),   # a subtype code, with its ratio supplied here
+        (1, "Primary", None),
+        (2, "Secondary", None),
+        (3, "Tertiary", None),
     ]
     for i in range(SETUP_ROWS["tier_map_first"], SETUP_ROWS["tier_map_last"] + 1):
         idx = i - SETUP_ROWS["tier_map_first"]
@@ -362,15 +361,18 @@ def build_data_tab(wb, title, headers, rows, note):
     return ws
 
 
-SPLITTER_HEADERS = ["OBJECTID", "SPLITTER_ID", "SPLTR_LEVEL", "SPLIT_RATIO", "x", "y"]
+SPLITTER_HEADERS = [
+    "OBJECTID", "NETWORK_DEVICE_NAME", "SPLITTER_ORDER", "SPLITTER_RATIO", "x", "y",
+]
 SPLITTER_SAMPLE = [
     # Tier and ratio bundled in one value, with no separate ratio field --
     # the shape a real Network Devices layer tends to have.
-    [1, "SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000],
-    [2, "SPL-002", "Secondary 1x16", None, -83.001000, 40.000500],
-    # A subtype code: the layer stores 7, its name was "Tertiary 1x128", and
-    # neither tier nor ratio can be read out of the number itself.
-    [3, "SPL-003", 7, None, -83.002000, 40.001000],
+    # Order and ratio both stored as integers, which is how fiber schemas
+    # usually carry them -- the "Primary 1x128" you see on a map is rendered
+    # from the pair, not stored as text.
+    [1, "SPL-001", 1, 8, -83.000000, 40.000000],
+    [2, "SPL-002", 2, 16, -83.001000, 40.000500],
+    [3, "SPL-003", 3, 128, -83.002000, 40.001000],
     [4, "SPL-004", None, None, -83.050000, 40.050000],
 ]
 
@@ -400,6 +402,7 @@ SCHEDULE_HEADERS = [
     "min dist^2",
     "addr row",
     "rule row",
+    "raw ratio",
 ]
 
 
@@ -519,11 +522,16 @@ def build_schedule(wb):
         # value is an integer, so there is nothing to read a ratio out of.
         # Nested IFs rather than AND(), because AND evaluates every argument and
         # INDEX(range,0) would then be reached.
-        ws[f"E{r}"] = (
+        ws[f"N{r}"] = (
             f'=IF({src}="","",'
             f'IF($M{r}=0,{field_or_name},'
             f'IF(COUNTBLANK(INDEX({lookup_ratios},$M{r}))=0,'
             f'INDEX({lookup_ratios},$M{r}),{field_or_name})))'
+        )
+        # A ratio field commonly stores just the split count as an integer, so
+        # 128 becomes 1x128 -- how the ratio is actually written and spoken.
+        ws[f"E{r}"] = (
+            f'=IF($N{r}="","",IF(ISNUMBER($N{r}),"1x"&$N{r},$N{r}))'
         )
         ws[f"F{r}"] = blank_safe("splitter_x")
         ws[f"G{r}"] = blank_safe("splitter_y")
@@ -565,12 +573,13 @@ def build_schedule(wb):
         ws,
         {
             "A": 9, "B": 18, "C": 16, "D": 12, "E": 10, "F": 13,
-            "G": 13, "H": 34, "I": 13, "J": 30, "K": 14, "L": 10, "M": 10,
+            "G": 13, "H": 34, "I": 13, "J": 30, "K": 14, "L": 10, "M": 10, "N": 10,
         },
     )
     ws.column_dimensions["K"].hidden = True
     ws.column_dimensions["L"].hidden = True
     ws.column_dimensions["M"].hidden = True
+    ws.column_dimensions["N"].hidden = True
     return ws
 
 
