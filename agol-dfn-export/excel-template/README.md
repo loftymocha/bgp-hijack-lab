@@ -17,10 +17,15 @@ manual step, and it does it inside a program you already have open.
 2. Get your **address point layer** into the `Addresses` tab the same way.
 3. On the `Setup` tab, type the column headings for splitter ID, tier, ratio, and
    the `x`/`y` coordinate columns, plus how many rows you pasted.
-4. Fill in the tier lookup. The left column is a **word that appears in** your
-   tier value, not the whole value — so a rule of `Primary` matches
-   `Primary 1x128`, and three rules cover every splitter no matter how many
-   ratio combinations exist.
+4. Fill in the tier lookup. Each rule is matched **exactly first, then as a word
+   inside the value**. So `Primary` matches `Primary 1x128` — three rules cover a
+   text layer however many ratio combinations exist — while a subtype code of `7`
+   matches only the rule `7`, never `17` or `70`. Both sides are compared as
+   text, so the number `7` and the text `"7"` are the same value.
+
+   The third column, **Ratio**, is for when the value carries no readable ratio.
+   A subtype code of `7` tells you nothing, but its name was `Primary 1x128`, so
+   type `1x128` beside that rule and the schedule fills it in.
 5. Read the `Schedule` tab. Filter the **QA Flags** column: flagged rows need you,
    unflagged rows are done.
 
@@ -30,10 +35,19 @@ expects and watch the Schedule work before you paste anything real. Delete them.
 ## When the ratio is part of the device name
 
 Fiber schemas often carry no separate ratio field, because the ratio is already
-in the device type: `Primary 1x128`, `Secondary 1x16`. Leave the ratio column
-blank on Setup and the workbook lifts `1x<n>` out of the tier value instead.
-Name a ratio column and that wins, falling back to extraction only where it's
-empty.
+in the device type: `Primary 1x128`, `Secondary 1x16`.
+
+Three sources are tried, in order:
+
+1. **The Ratio column beside the matched rule on Setup** — the only option that
+   works for subtype codes, where the stored value is a bare integer.
+2. **A ratio field named on Setup**, where it has a value.
+3. **Extracted from the tier value itself** — `1x<n>` lifted out of
+   `Primary 1x128`.
+
+A layer whose type field is a **subtype** (its `Type ID Field` on the directory
+page) stores integers, not names. Read the code-to-name pairs from the layer's
+**Types** section and fill one lookup row per subtype: code, tier, ratio.
 
 ## Design notes
 

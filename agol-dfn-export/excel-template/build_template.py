@@ -201,7 +201,7 @@ SETUP_ROWS = {
     "max_ft": 24,
     "ft_per_deg": 25,
     "tier_map_first": 30,
-    "tier_map_last": 44,
+    "tier_map_last": 59,
 }
 
 
@@ -226,7 +226,7 @@ ADDR = f"Addresses!$A$1:$CZ${MAX_ROWS}"
 
 def build_setup(wb):
     ws = wb.create_sheet("Setup")
-    widths(ws, {"A": 30, "B": 20, "C": 11, "D": 60})
+    widths(ws, {"A": 30, "B": 20, "C": 12, "D": 16, "E": 60})
 
     put(ws, "A2", "Setup", H1_FONT)
     put(
@@ -241,7 +241,7 @@ def build_setup(wb):
         """A plain number the user types (row counts, distance limit)."""
         put(ws, f"A{row}", label, LABEL_FONT)
         put(ws, f"B{row}", value, INPUT_FONT, INPUT_FILL, fmt)
-        put(ws, f"D{row}", note, NOTE_FONT)
+        put(ws, f"E{row}", note, NOTE_FONT)
 
     def colfield(row, label, value, sheet, note, optional=False):
         """A column HEADER NAME the user types; C resolves it to a column number."""
@@ -255,7 +255,7 @@ def build_setup(wb):
             f'={blank_guard}IFERROR(MATCH($B{row},{sheet}!$1:$1,0),{fallback}))',
             BODY_FONT,
         )
-        put(ws, f"D{row}", note, NOTE_FONT)
+        put(ws, f"E{row}", note, NOTE_FONT)
 
     put(ws, "C4", "Column #", LABEL_FONT)
     put(ws, "A4", "SPLITTERS TAB", LABEL_FONT)
@@ -299,25 +299,39 @@ def build_setup(wb):
         "You should not need to change this.",
         "DFN template",
     )
-    put(ws, "D25", "Constant -- you should not need to change this.", NOTE_FONT)
+    put(ws, "E25", "Constant -- you should not need to change this.", NOTE_FONT)
 
     put(ws, "A28", "TIER LOOKUP", LABEL_FONT)
-    put(ws, "A29", "Left: a word that APPEARS IN your tier value. Right: what it means. "
-                    "\"Primary\" matches \"Primary 1x128\" -- no need to list every combination.",
+    put(ws, "A29", "Matched EXACTLY first, then as a word appearing inside the value. So a "
+                    "subtype code like 7 matches exactly, and \"Primary\" matches \"Primary 1x128\".",
         NOTE_FONT)
-    put(ws, "B29", "Word to look for", LABEL_FONT)
+    put(ws, "B29", "Value or word", LABEL_FONT)
     put(ws, "C29", "Tier", LABEL_FONT)
+    put(ws, "D29", "Ratio (optional)", LABEL_FONT)
 
-    seed = [("Primary", "Primary"), ("Secondary", "Secondary"), ("Tertiary", "Tertiary")]
+    seed = [
+        ("Primary", "Primary", None),
+        ("Secondary", "Secondary", None),
+        ("Tertiary", "Tertiary", None),
+        (7, "Tertiary", "1x128"),   # a subtype code, with its ratio supplied here
+    ]
     for i in range(SETUP_ROWS["tier_map_first"], SETUP_ROWS["tier_map_last"] + 1):
         idx = i - SETUP_ROWS["tier_map_first"]
-        value, tier = seed[idx] if idx < len(seed) else ("", "")
+        value, tier, lratio = seed[idx] if idx < len(seed) else ("", "", None)
         put(ws, f"B{i}", value, INPUT_FONT, INPUT_FILL)
         put(ws, f"C{i}", tier, INPUT_FONT, INPUT_FILL)
+        put(ws, f"D{i}", lratio, INPUT_FONT, INPUT_FILL)
     put(
         ws,
-        f"D{SETUP_ROWS['tier_map_first']}",
+        f"E{SETUP_ROWS['tier_map_first']}",
         "Example values shown -- replace with the ones your layer actually uses.",
+        NOTE_FONT,
+    )
+    put(
+        ws,
+        f"E{SETUP_ROWS['tier_map_first'] + 1}",
+        "Fill the Ratio column only when the ratio cannot be read from the value itself "
+        "-- e.g. subtype codes, where 7 tells you nothing but its name was 'Primary 1x128'.",
         NOTE_FONT,
     )
     return ws
@@ -354,7 +368,9 @@ SPLITTER_SAMPLE = [
     # the shape a real Network Devices layer tends to have.
     [1, "SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000],
     [2, "SPL-002", "Secondary 1x16", None, -83.001000, 40.000500],
-    [3, "SPL-003", "Tertiary 1x128", None, -83.002000, 40.001000],
+    # A subtype code: the layer stores 7, its name was "Tertiary 1x128", and
+    # neither tier nor ratio can be read out of the number itself.
+    [3, "SPL-003", 7, None, -83.002000, 40.001000],
     [4, "SPL-004", None, None, -83.050000, 40.050000],
 ]
 
@@ -383,6 +399,7 @@ SCHEDULE_HEADERS = [
     "QA Flags",
     "min dist^2",
     "addr row",
+    "rule row",
 ]
 
 
@@ -462,26 +479,51 @@ def build_schedule(wb):
         # other text ("Primary 1x128"), so a rule of "Primary" has to hit it.
         tmf, tml = SETUP_ROWS["tier_map_first"], SETUP_ROWS["tier_map_last"]
         rules = f"Setup!$B${tmf}:$B${tml}"
-        hit_row = (
+        tiers = f"Setup!$C${tmf}:$C${tml}"
+        lookup_ratios = f"Setup!$D${tmf}:$D${tml}"
+
+        # Exact match wins, substring is the fallback. Both are needed: a subtype
+        # code of 7 must match only the rule "7" and not "17" or "70", while
+        # "Primary" has to match inside "Primary 1x128". Exact-first gives both.
+        # Both sides are coerced to text before matching. A subtype code arrives
+        # as the number 7 while the rule beside it may be typed as text, and a
+        # plain MATCH treats those as different values.
+        exact = f'IFERROR(SUMPRODUCT(MATCH($C{r}&"",{rules}&"",0)),0)'
+        substring = (
             f'SUMPRODUCT(MAX(({rules}<>"")'
             f'*ISNUMBER(SEARCH({rules},$C{r}))'
             f'*(ROW({rules})-{tmf - 1})))'
         )
-        # No match makes hit_row 0, and INDEX(range,0) returns the whole range
+        # A blank tier value must not match the empty rule slots, so it is
+        # short-circuited to 0 rather than sent through either match.
+        ws[f"M{r}"] = (
+            f'=IF({src}="","",IF($C{r}="",0,'
+            f'IF({exact}>0,{exact},{substring})))'
+        )
+
+        # M is 0 when nothing matched, and INDEX(range,0) returns the whole range
         # rather than an error -- which silently yields the first rule's tier.
         # The zero has to be caught explicitly.
         ws[f"D{r}"] = (
-            f'=IF({src}="","",IF({hit_row}=0,"",'
-            f'IFERROR(INDEX(Setup!$C${tmf}:$C${tml},{hit_row}),"")))'
+            f'=IF({src}="","",IF($M{r}=0,"",IFERROR(INDEX({tiers},$M{r}),"")))'
         )
         # Many schemas have no separate ratio field because the ratio is part of
         # the device name. Fall back to lifting "1x<n>" out of that text.
         from_name = f'IFERROR(TRIM(MID($C{r},SEARCH("1x",$C{r}),20)),"")'
         ratio_ref = cell_from(SPL, "splitter_ratio", src)
+        field_or_name = (
+            f'IF({s("splitter_ratio")}="",{from_name},'
+            f'IF(COUNTBLANK({ratio_ref})=0,{ratio_ref},{from_name}))'
+        )
+        # A ratio typed beside the matched rule wins: with subtype codes the
+        # value is an integer, so there is nothing to read a ratio out of.
+        # Nested IFs rather than AND(), because AND evaluates every argument and
+        # INDEX(range,0) would then be reached.
         ws[f"E{r}"] = (
             f'=IF({src}="","",'
-            f'IF({s("splitter_ratio")}="",{from_name},'
-            f'IF(COUNTBLANK({ratio_ref})=0,{ratio_ref},{from_name})))'
+            f'IF($M{r}=0,{field_or_name},'
+            f'IF(COUNTBLANK(INDEX({lookup_ratios},$M{r}))=0,'
+            f'INDEX({lookup_ratios},$M{r}),{field_or_name})))'
         )
         ws[f"F{r}"] = blank_safe("splitter_x")
         ws[f"G{r}"] = blank_safe("splitter_y")
@@ -523,11 +565,12 @@ def build_schedule(wb):
         ws,
         {
             "A": 9, "B": 18, "C": 16, "D": 12, "E": 10, "F": 13,
-            "G": 13, "H": 34, "I": 13, "J": 30, "K": 14, "L": 10,
+            "G": 13, "H": 34, "I": 13, "J": 30, "K": 14, "L": 10, "M": 10,
         },
     )
     ws.column_dimensions["K"].hidden = True
     ws.column_dimensions["L"].hidden = True
+    ws.column_dimensions["M"].hidden = True
     return ws
 
 

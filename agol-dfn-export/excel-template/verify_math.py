@@ -20,7 +20,7 @@ MAX_FT = 500.0
 SPLITTERS = [
     ("SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000),
     ("SPL-002", "Secondary 1x16", None, -83.001000, 40.000500),
-    ("SPL-003", "Tertiary 1x128", None, -83.002000, 40.001000),
+    ("SPL-003", 7, None, -83.002000, 40.001000),
     ("SPL-004", None, None, -83.050000, 40.050000),
 ]
 ADDRESSES = [
@@ -29,19 +29,40 @@ ADDRESSES = [
     ("415", "E LANE AVE", -83.002050, 40.001050),
 ]
 # Substring rules, mirroring the workbook's SEARCH-based lookup.
-TIER_RULES = [("Primary", "Primary"), ("Secondary", "Secondary"), ("Tertiary", "Tertiary")]
+TIER_RULES = [
+    # (value or word, tier, ratio supplied here or None)
+    ("Primary", "Primary", None),
+    ("Secondary", "Secondary", None),
+    ("Tertiary", "Tertiary", None),
+    (7, "Tertiary", "1x128"),
+]
+
+
+def matched_rule(raw):
+    """Index of the rule the workbook's M column lands on; None for no match."""
+    if raw is None or raw == "":
+        return None
+    # Exact first, compared as text so 7 and "7" are the same value.
+    for i, (needle, _t, _r) in enumerate(TIER_RULES):
+        if str(needle) == str(raw):
+            return i
+    # Then substring, last match winning as MAX does.
+    hits = [i for i, (needle, _t, _r) in enumerate(TIER_RULES)
+            if needle != "" and str(needle).lower() in str(raw).lower()]
+    return hits[-1] if hits else None
 
 
 def resolve_tier(raw):
-    """What the Tier column's SUMPRODUCT/MAX/SEARCH formula computes."""
-    if raw is None:
-        return ""
-    hits = [tier for needle, tier in TIER_RULES if needle.lower() in str(raw).lower()]
-    return hits[-1] if hits else ""   # MAX picks the last matching rule
+    """What the Tier column computes."""
+    i = matched_rule(raw)
+    return TIER_RULES[i][1] if i is not None else ""
 
 
 def resolve_ratio(raw):
-    """What the Ratio column computes when no separate ratio field is named."""
+    """What the Ratio column computes with no separate ratio field named."""
+    i = matched_rule(raw)
+    if i is not None and TIER_RULES[i][2]:
+        return TIER_RULES[i][2]          # ratio typed beside the matched rule
     if raw is None:
         return ""
     text = str(raw)

@@ -39,6 +39,8 @@ EXPECTED = {
     # row: (splitter, tier, ratio, nearest address, distance ft, QA flags)
     6: ("SPL-001", "Primary", "1x8", "100 N HIGH ST", 22.9, ""),
     7: ("SPL-002", "Secondary", "1x16", "212 W 5TH AVE", 22.9, ""),
+    # subtype code 7: tier and ratio both come from the lookup row, since the
+    # stored value is a bare number with nothing readable in it
     8: ("SPL-003", "Tertiary", "1x128", "415 E LANE AVE", 22.9, ""),
     9: ("SPL-004", "", "", "", 22270.6, "no-tier no-ratio address-too-far"),
 }
