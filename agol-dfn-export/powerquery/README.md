@@ -52,16 +52,44 @@ The trick is that your signed-in browser can already query the layer. So let it:
 2. Set `Where` to `1=1`, `Out Fields` to `*`, `Return Geometry` to `true`,
    `Output Spatial Reference` to `4326`, `Format` to `JSON`. Run it.
 3. Save the JSON to a file.
-4. Point `agol-from-saved-json.pq` at that file.
+4. Point `agol-from-saved-json.pq` at the folder, with a filename prefix per layer.
 
 No credentials anywhere, because nothing but the browser touches the network.
 The cost is that it's a snapshot rather than a live connection — a new DFN means
 exporting again.
 
+**Filter at the source.** If the layer covers more than you need, narrow it in the
+form's `Where` box — plain SQL, no URL encoding: `STATE = 'WA'`. Every feature
+excluded is one fewer to page through. To find what values a field actually
+holds (`WA` vs `Washington` vs `53` — guessing wrong returns zero features, not
+an error), ask the layer:
+
+```
+/query?where=1%3D1&outFields=STATE&returnDistinctValues=true&f=json
+```
+
+With no usable attribute, filter by area instead — append a bounding box and
+leave `where` as `1=1`:
+
+```
+&geometry=-124.85,45.54,-116.91,49.00&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects
+```
+
+(That envelope is Washington state. A box is a rectangle, so it also catches
+edges of Oregon, Idaho and BC.)
+
+**Page from the address bar, not the form.** Once a query works, copy its URL and
+change only `resultOffset` for each page — far quicker than re-filling the form:
+
+```
+/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=2000&resultOffset=0&f=json
+```
+
 **Watch the feature count.** The service caps a single query, so a result of
 exactly 1,000 or 2,000 features means there's more. Set **Result Offset** to that
-number, run again, save as a second file, and list both in `Files`. Repeat until
-a run comes back short.
+number, run again, and save as a second file in the same folder. The loader
+stacks every file matching the prefix, so nothing in the query needs changing.
+Repeat until a run comes back short; overlapping pages are deduplicated.
 
 ## Getting a token
 

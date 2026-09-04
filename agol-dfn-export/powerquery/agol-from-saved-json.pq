@@ -2,50 +2,72 @@
 // Load an ArcGIS layer into Excel from JSON you saved out of the browser.
 //
 // Use this when you can't get a token: your signed-in browser can already query
-// the layer, so let it do the fetching and hand Excel the result as a file.
-// Nothing here touches the network, so there is no token and no permission to
-// be refused.
+// the layer, so it does the fetching and Excel reads the result off disk.
+// Nothing here touches the network, so there is no token to be refused.
+//
+// Point it at a FOLDER, not a single file. Every .json in there whose name
+// starts with your prefix gets loaded and stacked into one table -- so a layer
+// that needed several pages is just several files, no editing here.
+//
+//   dfn\splitters-1.json  \
+//   dfn\splitters-2.json   >  Prefix = "splitters"  ->  one table
+//   dfn\splitters-3.json  /
+//   dfn\addresses-1.json      Prefix = "addresses"  ->  a separate query
 //
 // Excel: Data > Get Data > From Other Sources > Blank Query > Advanced Editor.
-// Delete everything in the editor, paste this in, edit the file list below.
+// Delete everything in the editor, paste this in, edit the two values below.
 // ---------------------------------------------------------------------------
 let
-    // ======== EDIT THIS ========
+    // ======== EDIT THESE TWO ========
 
-    // Full paths to the .json files you saved from the REST Query form.
-    // One file is usually enough. Add more only if the layer needed paging --
-    // the runbook explains how to tell.
-    //
-    // Backslashes are fine as-is. Keep each path in quotes, commas between them.
-    Files = {
-        "C:\Users\YOURNAME\Desktop\splitters.json"
-        // , "C:\Users\YOURNAME\Desktop\splitters-2.json"
-    },
+    // The folder holding your saved .json files. Backslashes are fine as-is.
+    FolderPath = "C:\Users\YOURNAME\Desktop\dfn",
+
+    // Loads every .json file whose name starts with this. Case doesn't matter.
+    // Run this query once per layer, changing only this line.
+    Prefix = "splitters",
 
     // ======== NOTHING BELOW HERE NEEDS EDITING ========
 
-    LoadOne = (path as text) as list =>
-        let
-            Doc = Json.Document(File.Contents(path)),
-            Features =
-                if Record.HasFields(Doc, "features") then Doc[features]
-                else if Record.HasFields(Doc, "error") then
-                    error Error.Record(
-                        "ArcGIS returned an error, not data",
-                        "Re-run the query in the browser and save the result again.",
-                        Doc[error]
-                    )
-                else
-                    error Error.Record(
-                        "Not an ArcGIS query result",
-                        "No 'features' in " & path & ". Check you saved the JSON output of the "
-                            & "Query operation, not the layer's description page.",
-                        null
-                    )
-        in
-            Features,
+    Source = Folder.Files(FolderPath),
+    Wanted = Table.SelectRows(
+        Source,
+        each Text.EndsWith(Text.Lower([Name]), ".json")
+            and Text.StartsWith(Text.Lower([Name]), Text.Lower(Prefix))
+    ),
 
-    Features = List.Combine(List.Transform(Files, LoadOne)),
+    // Fail loudly rather than returning a confusing empty table.
+    Checked =
+        if Table.RowCount(Wanted) = 0 then
+            error Error.Record(
+                "No files matched",
+                "Nothing in " & FolderPath & " both starts with """ & Prefix
+                    & """ and ends in .json. Check the folder path and the file names.",
+                null
+            )
+        else Wanted,
+
+    WithFeatures = Table.AddColumn(Checked, "Feats", each
+        let
+            Doc = Json.Document([Content])
+        in
+            if Record.HasFields(Doc, "features") then Doc[features]
+            else if Record.HasFields(Doc, "error") then
+                error Error.Record(
+                    "ArcGIS returned an error, not data",
+                    [Name] & " holds an error response. Re-run that page in the browser and save it again.",
+                    Doc[error]
+                )
+            else
+                error Error.Record(
+                    "Not an ArcGIS query result",
+                    "No 'features' in " & [Name] & ". Check you saved the JSON output of the Query "
+                        & "operation, not the layer's description page.",
+                    null
+                )
+    ),
+
+    Features = List.Combine(WithFeatures[Feats]),
 
     AsTable = Table.FromList(Features, Splitter.SplitByNothing(), {"Feature"}),
     Parts = Table.ExpandRecordColumn(
@@ -63,6 +85,9 @@ let
 
     // Point layers carry x/y, which is what the workbook needs. On line or
     // polygon layers these come back null; delete the columns if unwanted.
-    WithXY = Table.ExpandRecordColumn(Attributes, "geometry", {"x", "y"}, {"x", "y"})
+    WithXY = Table.ExpandRecordColumn(Attributes, "geometry", {"x", "y"}, {"x", "y"}),
+
+    // Paging can overlap if an offset gets repeated; drop exact duplicates.
+    Deduped = Table.Distinct(WithXY)
 in
-    WithXY
+    Deduped
