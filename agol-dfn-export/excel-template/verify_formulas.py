@@ -36,10 +36,11 @@ except ImportError:
 
 # row -> (splitter, tier, nearest address, distance ft, QA flags)
 EXPECTED = {
-    6: ("SPL-001", "Primary", "100 N HIGH ST", 22.9, ""),
-    7: ("SPL-002", "Secondary", "212 W 5TH AVE", 22.9, ""),
-    8: ("SPL-003", "Tertiary", "415 E LANE AVE", 22.9, ""),
-    9: ("SPL-004", "", "", 22270.6, "no-tier address-too-far"),
+    # row: (splitter, tier, ratio, nearest address, distance ft, QA flags)
+    6: ("SPL-001", "Primary", "1x8", "100 N HIGH ST", 22.9, ""),
+    7: ("SPL-002", "Secondary", "1x16", "212 W 5TH AVE", 22.9, ""),
+    8: ("SPL-003", "Tertiary", "1x128", "415 E LANE AVE", 22.9, ""),
+    9: ("SPL-004", "", "", "", 22270.6, "no-tier no-ratio address-too-far"),
 }
 
 
@@ -74,12 +75,12 @@ def main() -> int:
         return "" if v is None else str(v).strip()
 
     problems: list[str] = []
-    header = f"{'row':>3}  {'splitter':<9} {'tier':<10} {'address':<15} {'ft':>9}  flags"
+    header = f"{'row':>3}  {'splitter':<9} {'tier':<10} {'ratio':<7} {'address':<15} {'ft':>9}  flags"
     print(header)
     print("-" * len(header))
 
-    for row, (splitter, tier, address, distance, flags) in EXPECTED.items():
-        got = {c: val(f"{c}{row}") for c in "BDHIJK"}
+    for row, (splitter, tier, ratio, address, distance, flags) in EXPECTED.items():
+        got = {c: val(f"{c}{row}") for c in "BDEHIJK"}
 
         for col, value in got.items():
             if isinstance(value, str) and value.startswith("#"):
@@ -89,6 +90,8 @@ def main() -> int:
             problems.append(f"B{row} splitter: {got['B']!r} != {splitter!r}")
         if norm(got["D"]) != tier:
             problems.append(f"D{row} tier: {got['D']!r} != {tier!r}")
+        if norm(got["E"]) != ratio:
+            problems.append(f"E{row} ratio: {got['E']!r} != {ratio!r}")
         if norm(got["H"]) != address:
             problems.append(f"H{row} address: {got['H']!r} != {address!r}")
         if norm(got["J"]) != flags:
@@ -102,7 +105,7 @@ def main() -> int:
         dist = got["I"]
         dist_s = f"{dist:9.1f}" if isinstance(dist, (int, float)) else f"{str(dist):>9}"
         print(
-            f"{row:>3}  {norm(got['B']):<9} {norm(got['D']):<10} "
+            f"{row:>3}  {norm(got['B']):<9} {norm(got['D']):<10} {norm(got['E']):<7} "
             f"{norm(got['H']):<15} {dist_s}  {norm(got['J'])}"
         )
 

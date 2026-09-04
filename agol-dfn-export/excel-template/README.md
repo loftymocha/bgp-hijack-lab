@@ -17,13 +17,23 @@ manual step, and it does it inside a program you already have open.
 2. Get your **address point layer** into the `Addresses` tab the same way.
 3. On the `Setup` tab, type the column headings for splitter ID, tier, ratio, and
    the `x`/`y` coordinate columns, plus how many rows you pasted.
-4. Fill in the tier lookup — the exact values your data uses (`Level 1`, `P`,
-   `PRIMARY`…) mapped to Primary / Secondary / Tertiary.
+4. Fill in the tier lookup. The left column is a **word that appears in** your
+   tier value, not the whole value — so a rule of `Primary` matches
+   `Primary 1x128`, and three rules cover every splitter no matter how many
+   ratio combinations exist.
 5. Read the `Schedule` tab. Filter the **QA Flags** column: flagged rows need you,
    unflagged rows are done.
 
 The workbook ships with a few rows of sample data so you can see the shape it
 expects and watch the Schedule work before you paste anything real. Delete them.
+
+## When the ratio is part of the device name
+
+Fiber schemas often carry no separate ratio field, because the ratio is already
+in the device type: `Primary 1x128`, `Secondary 1x16`. Leave the ratio column
+blank on Setup and the workbook lifts `1x<n>` out of the tier value instead.
+Name a ratio column and that wins, falling back to extraction only where it's
+empty.
 
 ## Design notes
 

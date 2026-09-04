@@ -265,8 +265,10 @@ def build_setup(wb):
              "Type the column HEADING exactly as it appears in row 1 of that tab")
     colfield(8, "Tier / level column", "SPLTR_LEVEL", "Splitters",
              "The heading of the column holding primary/secondary/tertiary")
-    colfield(9, "Split ratio column", "SPLIT_RATIO", "Splitters",
-             "The heading of the column holding 1x8, 1x16, 1x32 etc.")
+    colfield(9, "Split ratio column", "", "Splitters",
+             "Leave BLANK if the ratio is part of the tier value (e.g. \"Primary 1x128\") "
+             "-- it will be read out of that instead",
+             optional=True)
     colfield(10, "Longitude column", "x", "Splitters", "The AGOL export calls this 'x'")
     colfield(11, "Latitude column", "y", "Splitters", "The AGOL export calls this 'y'")
 
@@ -300,11 +302,13 @@ def build_setup(wb):
     put(ws, "D25", "Constant -- you should not need to change this.", NOTE_FONT)
 
     put(ws, "A28", "TIER LOOKUP", LABEL_FONT)
-    put(ws, "A29", "Left: the exact value in your tier column. Right: what it means.", NOTE_FONT)
-    put(ws, "B29", "Value in your data", LABEL_FONT)
+    put(ws, "A29", "Left: a word that APPEARS IN your tier value. Right: what it means. "
+                    "\"Primary\" matches \"Primary 1x128\" -- no need to list every combination.",
+        NOTE_FONT)
+    put(ws, "B29", "Word to look for", LABEL_FONT)
     put(ws, "C29", "Tier", LABEL_FONT)
 
-    seed = [("Level 1", "Primary"), ("Level 2", "Secondary"), ("Level 3", "Tertiary")]
+    seed = [("Primary", "Primary"), ("Secondary", "Secondary"), ("Tertiary", "Tertiary")]
     for i in range(SETUP_ROWS["tier_map_first"], SETUP_ROWS["tier_map_last"] + 1):
         idx = i - SETUP_ROWS["tier_map_first"]
         value, tier = seed[idx] if idx < len(seed) else ("", "")
@@ -346,10 +350,12 @@ def build_data_tab(wb, title, headers, rows, note):
 
 SPLITTER_HEADERS = ["OBJECTID", "SPLITTER_ID", "SPLTR_LEVEL", "SPLIT_RATIO", "x", "y"]
 SPLITTER_SAMPLE = [
-    [1, "SPL-001", "Level 1", "1x8", -83.000000, 40.000000],
-    [2, "SPL-002", "Level 2", "1x16", -83.001000, 40.000500],
-    [3, "SPL-003", "Level 3", "1x32", -83.002000, 40.001000],
-    [4, "SPL-004", None, "1x32", -83.050000, 40.050000],
+    # Tier and ratio bundled in one value, with no separate ratio field --
+    # the shape a real Network Devices layer tends to have.
+    [1, "SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000],
+    [2, "SPL-002", "Secondary 1x16", None, -83.001000, 40.000500],
+    [3, "SPL-003", "Tertiary 1x128", None, -83.002000, 40.001000],
+    [4, "SPL-004", None, None, -83.050000, 40.050000],
 ]
 
 ADDRESS_HEADERS = ["OBJECTID", "HOUSE_NUM", "STREET", "x", "y"]
@@ -452,12 +458,31 @@ def build_schedule(wb):
 
         ws[f"B{r}"] = blank_safe("splitter_id")
         ws[f"C{r}"] = blank_safe("splitter_tier")
-        ws[f"D{r}"] = (
-            f'=IF({src}="","",IFERROR(INDEX(Setup!$C${SETUP_ROWS["tier_map_first"]}:'
-            f'$C${SETUP_ROWS["tier_map_last"]},MATCH($C{r},'
-            f'Setup!$B${SETUP_ROWS["tier_map_first"]}:$B${SETUP_ROWS["tier_map_last"]},0)),""))'
+        # Substring match, not exact: real device names bundle the tier in with
+        # other text ("Primary 1x128"), so a rule of "Primary" has to hit it.
+        tmf, tml = SETUP_ROWS["tier_map_first"], SETUP_ROWS["tier_map_last"]
+        rules = f"Setup!$B${tmf}:$B${tml}"
+        hit_row = (
+            f'SUMPRODUCT(MAX(({rules}<>"")'
+            f'*ISNUMBER(SEARCH({rules},$C{r}))'
+            f'*(ROW({rules})-{tmf - 1})))'
         )
-        ws[f"E{r}"] = blank_safe("splitter_ratio")
+        # No match makes hit_row 0, and INDEX(range,0) returns the whole range
+        # rather than an error -- which silently yields the first rule's tier.
+        # The zero has to be caught explicitly.
+        ws[f"D{r}"] = (
+            f'=IF({src}="","",IF({hit_row}=0,"",'
+            f'IFERROR(INDEX(Setup!$C${tmf}:$C${tml},{hit_row}),"")))'
+        )
+        # Many schemas have no separate ratio field because the ratio is part of
+        # the device name. Fall back to lifting "1x<n>" out of that text.
+        from_name = f'IFERROR(TRIM(MID($C{r},SEARCH("1x",$C{r}),20)),"")'
+        ratio_ref = cell_from(SPL, "splitter_ratio", src)
+        ws[f"E{r}"] = (
+            f'=IF({src}="","",'
+            f'IF({s("splitter_ratio")}="",{from_name},'
+            f'IF(COUNTBLANK({ratio_ref})=0,{ratio_ref},{from_name})))'
+        )
         ws[f"F{r}"] = blank_safe("splitter_x")
         ws[f"G{r}"] = blank_safe("splitter_y")
 

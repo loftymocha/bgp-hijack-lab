@@ -18,23 +18,42 @@ FT_PER_DEG = 364000.0
 MAX_FT = 500.0
 
 SPLITTERS = [
-    ("SPL-001", "Level 1", "1x8", -83.000000, 40.000000),
-    ("SPL-002", "Level 2", "1x16", -83.001000, 40.000500),
-    ("SPL-003", "Level 3", "1x32", -83.002000, 40.001000),
-    ("SPL-004", None, "1x32", -83.050000, 40.050000),
+    ("SPL-001", "Primary 1x8", "1x8", -83.000000, 40.000000),
+    ("SPL-002", "Secondary 1x16", None, -83.001000, 40.000500),
+    ("SPL-003", "Tertiary 1x128", None, -83.002000, 40.001000),
+    ("SPL-004", None, None, -83.050000, 40.050000),
 ]
 ADDRESSES = [
     ("100", "N HIGH ST", -83.000050, 40.000050),
     ("212", "W 5TH AVE", -83.001050, 40.000550),
     ("415", "E LANE AVE", -83.002050, 40.001050),
 ]
-TIER_MAP = {"Level 1": "Primary", "Level 2": "Secondary", "Level 3": "Tertiary"}
+# Substring rules, mirroring the workbook's SEARCH-based lookup.
+TIER_RULES = [("Primary", "Primary"), ("Secondary", "Secondary"), ("Tertiary", "Tertiary")]
+
+
+def resolve_tier(raw):
+    """What the Tier column's SUMPRODUCT/MAX/SEARCH formula computes."""
+    if raw is None:
+        return ""
+    hits = [tier for needle, tier in TIER_RULES if needle.lower() in str(raw).lower()]
+    return hits[-1] if hits else ""   # MAX picks the last matching rule
+
+
+def resolve_ratio(raw):
+    """What the Ratio column computes when no separate ratio field is named."""
+    if raw is None:
+        return ""
+    text = str(raw)
+    at = text.lower().find("1x")
+    return text[at:at + 20].strip() if at >= 0 else ""
 
 EXPECTED = {
-    "SPL-001": ("Primary", "100 N HIGH ST"),
-    "SPL-002": ("Secondary", "212 W 5TH AVE"),
-    "SPL-003": ("Tertiary", "415 E LANE AVE"),
-    "SPL-004": ("", ""),  # no tier in the lookup, nearest address far beyond the gate
+    # splitter: (tier, nearest address, ratio)
+    "SPL-001": ("Primary", "100 N HIGH ST", "1x8"),
+    "SPL-002": ("Secondary", "212 W 5TH AVE", "1x16"),
+    "SPL-003": ("Tertiary", "415 E LANE AVE", "1x128"),
+    "SPL-004": ("", "", ""),  # no tier value at all, and no address within the gate
 }
 
 
@@ -47,22 +66,27 @@ def dist2_ft(slon, slat, alon, alat):
 
 def main() -> int:
     failures = []
-    print(f"{'splitter':<10} {'tier':<10} {'nearest':<16} {'dist ft':>9}  verdict")
-    print("-" * 60)
+    print(f"{'splitter':<10} {'tier':<10} {'ratio':<7} {'nearest':<16} {'dist ft':>9}  verdict")
+    print("-" * 68)
 
     for name, raw_tier, _ratio, lon, lat in SPLITTERS:
-        tier = TIER_MAP.get(raw_tier, "")
+        tier = resolve_tier(raw_tier)
+        ratio = resolve_ratio(raw_tier)
         d2 = [dist2_ft(lon, lat, alon, alat) for _n, _s, alon, alat in ADDRESSES]
         best = min(d2)
         idx = d2.index(best)
         dist = math.sqrt(best)
         address = f"{ADDRESSES[idx][0]} {ADDRESSES[idx][1]}" if dist <= MAX_FT else ""
 
-        want_tier, want_addr = EXPECTED[name]
-        ok = (tier == want_tier) and (address == want_addr)
+        want_tier, want_addr, want_ratio = EXPECTED[name]
+        ok = (tier == want_tier) and (address == want_addr) and (ratio == want_ratio)
         if not ok:
-            failures.append(f"{name}: got ({tier!r},{address!r}) want ({want_tier!r},{want_addr!r})")
-        print(f"{name:<10} {tier or '-':<10} {address or '-':<16} {dist:>9.1f}  {'ok' if ok else 'MISMATCH'}")
+            failures.append(
+                f"{name}: got ({tier!r},{address!r},{ratio!r}) "
+                f"want ({want_tier!r},{want_addr!r},{want_ratio!r})"
+            )
+        print(f"{name:<10} {tier or '-':<10} {ratio or '-':<7} {address or '-':<16} "
+              f"{dist:>9.1f}  {'ok' if ok else 'MISMATCH'}")
 
     # The gate must actually be doing something: SPL-004 has to be beyond it.
     lon, lat = SPLITTERS[3][3], SPLITTERS[3][4]
