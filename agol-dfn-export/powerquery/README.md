@@ -39,6 +39,30 @@ Use a private window specifically because your normal window is already signed
 in and will succeed either way, which tells you nothing. Excel doesn't share
 your browser's session.
 
+## If you can't get a token at all
+
+An AGOL account without developer privileges has no way to mint one: there is no
+token UI, and `generateToken` is a POST endpoint, not a page you can visit and
+fill in. If that's you, don't fight it — use **`agol-from-saved-json.pq`** instead.
+
+The trick is that your signed-in browser can already query the layer. So let it:
+
+1. On the layer's **ArcGIS REST Services Directory** page, scroll to the bottom
+   and click **Query** under Supported Operations.
+2. Set `Where` to `1=1`, `Out Fields` to `*`, `Return Geometry` to `true`,
+   `Output Spatial Reference` to `4326`, `Format` to `JSON`. Run it.
+3. Save the JSON to a file.
+4. Point `agol-from-saved-json.pq` at that file.
+
+No credentials anywhere, because nothing but the browser touches the network.
+The cost is that it's a snapshot rather than a live connection — a new DFN means
+exporting again.
+
+**Watch the feature count.** The service caps a single query, so a result of
+exactly 1,000 or 2,000 features means there's more. Set **Result Offset** to that
+number, run again, save as a second file, and list both in `Files`. Repeat until
+a run comes back short.
+
 ## Getting a token
 
 Two options, in order of preference.
